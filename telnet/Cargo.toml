@@ -1,5 +1,5 @@
 [package]
-name = "any_message"
+name = "telnet"
 version = "0.1.0"
 authors = ["Ilias Makhiyanov <iliasmach@cloud-mind.com>"]
 edition = "2018"
@@ -8,13 +8,7 @@ edition = "2018"
 
 [dependencies]
 actix="0.12.0"
-actix-rt="2.2.0"
-
-[workspace]
-members = [
-    ".",
-    "base",
-    "rabbitmq",
-    "redis",
-    "telnet"
-]
+actix-rt = "2.2.0"
+base = { version = "0.1.0", path = "../base" }
+telnet = "0.1.4"
+log="0.4.14"
