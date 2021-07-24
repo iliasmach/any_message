@@ -1,5 +1,5 @@
 use actix::Message;
-use crate::route::{RouteSheet, Route};
+use crate::route::{RouteSheet, Route, Target};
 use std::time::Duration;
 use crate::operation::Operation;
 use log::trace;
@@ -61,7 +61,7 @@ impl Parcel {
         Self { route_sheet, messages, ttl: None }
     }
 
-    pub fn target(&self) -> &Route {
+    pub fn target(&self) -> &Target {
         self.route_sheet.target()
     }
 

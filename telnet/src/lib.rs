@@ -4,7 +4,7 @@ use base::signal::{GetMessagesSignal, RegisterServiceInNodeSignal, Tick};
 use base::error::Error;
 use base::message::{Parcel, BaseMessage};
 use telnet::{Telnet, TelnetEvent};
-use base::route::{RouteSheet, Route};
+use base::route::{RouteSheet, Route, Target};
 use log::{debug, info, trace};
 use base::service::{ServiceCore};
 use base::transport::Transport;
@@ -76,7 +76,7 @@ impl TelnetService {
         trace!("Sending messages");
         service.do_send(
             Parcel::new(messages, RouteSheet::new(
-                Route::new(), Route::new(),
+                Target::Consumer("Telnet Message".to_string()), Route::new(),
             )));
     }
 }
@@ -135,7 +135,8 @@ mod tests {
                 Node::new("telnet".to_string())
             }).await;
 
-            let telnet = TelnetService::new(core.node().recipient::<Parcel>(), "185.179.2.33".to_string(),
+            let telnet = TelnetService::new(core.node().recipient::<Parcel>(),
+                                            "185.179.2.33".to_string(),
                                             5038,
                                             10000000,
                                             Some(50));

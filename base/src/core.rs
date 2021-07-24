@@ -71,7 +71,7 @@ impl Core {
     }
 
     pub async fn service<F:Fn(ServiceCore, Addr<Node>, &Core)->ServiceCore>(&self, service_name:String, next: Option<Recipient<Parcel>>, mut config: F) -> Addr<ServiceCore> {
-        let service_core = config(ServiceCore::new(service_name.clone(), self.node.clone(), next), self.node.clone(), self);
+        let service_core = config(ServiceCore::new(service_name.clone(), self.node.clone()), self.node.clone(), self);
 
         let arbiter = Arbiter::new().handle();
 

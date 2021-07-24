@@ -1,4 +1,4 @@
-use crate::route::Route;
+use crate::route::{Route, Target};
 use std::collections::HashMap;
 use crate::transport::Transport;
 use actix::{Actor, Context, Handler, AsyncContext};
@@ -15,7 +15,7 @@ pub struct Node {
     node_addresses: HashMap<String, Transport>,
     services: HashMap<String, Transport>,
     operations: HashMap<String, Transport>,
-    messages: Arc<Mutex<HashMap<Route, Vec<Parcel>>>>,
+    messages: Arc<Mutex<HashMap<Target, Vec<Parcel>>>>,
     requests: HashMap<String, Request>,
 }
 
@@ -60,15 +60,15 @@ impl Node {
         }
     }
 
-    pub fn find_transport_for_route(&self, route: &Route) -> Option<Transport> {
-        trace!("Finding transport for route {}", route.as_string());
-        let target = route.as_string();
+    pub fn find_transport_for_target(&self, target: &Target) -> Option<Transport> {
+        trace!("Finding transport for route {}", target.as_string());
+        let string_target = target.as_string();
 
-        match self.services.contains_key(&*target) {
+        match self.services.contains_key(&*string_target) {
             false => {
-                match self.node_addresses.contains_key(&*target) {
+                match self.node_addresses.contains_key(&*string_target) {
                     true => {
-                        let transport_ref = self.node_addresses.get(&*target);
+                        let transport_ref = self.node_addresses.get(&*string_target);
                         if transport_ref.is_some() {
                             Some(transport_ref.unwrap().clone())
                         } else {
@@ -79,7 +79,7 @@ impl Node {
                 }
             }
             true => {
-                let transport_ref = self.services.get(&target);
+                let transport_ref = self.services.get(&string_target);
                 if transport_ref.is_some() {
                     Some(transport_ref.unwrap().clone())
                 } else {
@@ -162,7 +162,7 @@ impl Handler<Tick> for Node {
         }
 
         for (route, parcels) in messages.iter_mut() {
-            match self.find_transport_for_route(route) {
+            match self.find_transport_for_target(route) {
                 Some(transport) => {
                     for parcel in parcels.drain(..) {
                         transport.send_parcel(&parcel);

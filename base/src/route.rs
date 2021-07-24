@@ -37,10 +37,22 @@ impl Route {
     }
 
 
-    pub fn set_node_name(&mut self, node_name: String) -> &mut Self { self.node_name = node_name; self }
-    pub fn set_service_name(&mut self, service_name: String) -> &mut Self { self.service_name = service_name; self }
-    pub fn set_operation_name(&mut self, operation_name: String) -> &mut Self { self.operation_name = operation_name; self }
-    pub fn set_inner_id(&mut self, inner_id: String) -> &mut Self { self.inner_id = inner_id; self }
+    pub fn set_node_name(&mut self, node_name: String) -> &mut Self {
+        self.node_name = node_name;
+        self
+    }
+    pub fn set_service_name(&mut self, service_name: String) -> &mut Self {
+        self.service_name = service_name;
+        self
+    }
+    pub fn set_operation_name(&mut self, operation_name: String) -> &mut Self {
+        self.operation_name = operation_name;
+        self
+    }
+    pub fn set_inner_id(&mut self, inner_id: String) -> &mut Self {
+        self.inner_id = inner_id;
+        self
+    }
 
     pub fn as_string(&self) -> String {
         let mut route = String::new();
@@ -70,50 +82,42 @@ impl Route {
 }
 
 #[derive(Debug, Clone)]
-pub enum RouteStrategy {
-    OneOf,
-    All,
+pub struct RouteSheet {
+    target: Target,
+    from: Route,
 }
 
-#[derive(Debug, Clone)]
-pub struct RouteSheet {
-    was_in: Vec<Route>,
-    was_in_targets: Vec<Route>,
-    target_routes: Vec<Route>,
-    current_target: Option<Route>,
-    next_route: Option<Route>,
-    from: Route,
-    route_strategy: RouteStrategy,
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum Target {
+    Route(Route),
+    Consumer(String),
+}
+
+impl Target {
+    pub fn as_string(&self) -> String {
+        match self {
+            Target::Route(route) => {
+                route.as_string()
+            },
+            Target::Consumer(name) => {
+                format!("Consumer({})", name.to_string())
+            }
+        }
+    }
 }
 
 impl RouteSheet {
-    pub fn new(target: Route, from: Route) -> Self {
+    pub fn new(target: Target, from: Route) -> Self {
         Self {
-            was_in: vec![],
-            was_in_targets: vec![],
-            target_routes: vec![target],
-            current_target: None,
-            next_route: None,
+            target,
             from,
-            route_strategy: RouteStrategy::OneOf,
         }
     }
 
-    pub fn target(&self) -> &Route {
-        &self.target_routes.first().unwrap()
+    pub fn target(&self) -> &Target {
+        &self.target
     }
     pub fn from(&self) -> &Route {
         &self.from
-    }
-    pub fn revert(&self) -> RouteSheet {
-        Self {
-            was_in: vec![],
-            was_in_targets: vec![],
-            current_target: None,
-            target_routes: vec![self.from.clone()],
-            from: self.current_target.clone().unwrap().clone(),
-            next_route: None,
-            route_strategy: RouteStrategy::OneOf,
-        }
     }
 }

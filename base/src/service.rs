@@ -10,6 +10,11 @@ use crate::node::{Node};
 use semver::Version;
 use crate::transport::Transport;
 
+pub trait Service: Handler<Parcel> + Sized {
+    fn new(name:String, node: Addr<Node>) -> Self;
+    fn build(&self) -> Addr<ServiceCore>;
+}
+
 pub struct ServiceRecipients {
     tick: Option<Recipient<Tick>>,
     parcel: Option<Recipient<Parcel>>,
@@ -28,7 +33,7 @@ pub struct ServiceCore {
 }
 
 impl ServiceCore {
-    pub fn new(service_name: String, node: Addr<Node>, next: Option<Recipient<Parcel>>) -> Self {
+    pub fn new(service_name: String, node: Addr<Node>) -> Self {
         let route= Route::new().set_service_name(service_name).clone();
         Self {
             route,
@@ -37,7 +42,7 @@ impl ServiceCore {
             requests_awaits: Default::default(),
             statistics: ServiceStatistics::new(),
             node,
-            next,
+            next: None,
             recipients: ServiceRecipients { tick: None, parcel: None },
             transport: None
         }

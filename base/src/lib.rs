@@ -1,6 +1,7 @@
 extern crate log;
 pub mod message;
 pub mod node;
+pub mod exchange;
 pub mod transport;
 pub mod signal;
 pub mod service;
