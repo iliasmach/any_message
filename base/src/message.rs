@@ -32,7 +32,6 @@ impl BaseMessage {
 
 #[derive(Debug)]
 pub struct Parcel {
-    message_type: String,
     route_sheet: RouteSheet,
     messages: Vec<BaseMessage>,
     ttl: Option<Duration>,
@@ -42,7 +41,6 @@ impl Clone for Parcel {
     fn clone(&self) -> Self {
         trace!("Cloning parcel");
         Self {
-            message_type: self.message_type.clone(),
             route_sheet: self.route_sheet.clone(),
             messages: self.messages.clone(),
             ttl: self.ttl.clone()
@@ -55,16 +53,13 @@ impl Clone for Parcel {
         self.ttl = source.ttl.clone();
         self.route_sheet = source.route_sheet.clone();
         self.messages = source.messages.clone();
-        self.message_type = source.message_type.clone();
     }
 }
 
 impl Parcel {
-    pub fn new(message_type: String, messages: Vec<BaseMessage>, route_sheet: RouteSheet) -> Self {
-        Self { message_type, route_sheet, messages, ttl: None }
+    pub fn new(messages: Vec<BaseMessage>, route_sheet: RouteSheet) -> Self {
+        Self { route_sheet, messages, ttl: None }
     }
-
-    pub fn message_type(&self) -> &String { &self.message_type }
 
     pub fn target(&self) -> &Route {
         self.route_sheet.target()

@@ -1,38 +1,70 @@
 use crate::route::{Route, RouteSheet};
-use actix::{Recipient, Handler, Addr};
-use crate::signal::{RegisterServiceInNodeSignal, GetMessagesSignal};
+use actix::{Recipient, Handler, Addr, Actor, Context};
+use crate::signal::{RegisterServiceInNodeSignal, GetMessagesSignal, Tick};
 use crate::error::Error;
 use crate::message::{BaseMessage, Parcel, Request};
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationHandler};
 use std::collections::HashMap;
 use chrono::{NaiveDateTime, Utc};
-use crate::node::Node;
+use crate::node::{Node};
 use semver::Version;
+use crate::transport::Transport;
 
-pub trait Service: Handler<Parcel> {
-    fn get_route(&self) -> &Route;
-    fn start_service(&mut self, name: Route, node: Recipient<RegisterServiceInNodeSignal>);
-    fn can_handle_operation(&self, route_sheet: &RouteSheet, operation: Option<String>) -> Result<bool, Error>;
-    fn handle_message(&mut self, message: BaseMessage);
+pub struct ServiceRecipients {
+    tick: Option<Recipient<Tick>>,
+    parcel: Option<Recipient<Parcel>>,
 }
 
-pub struct ServiceImpl {
+pub struct ServiceCore {
     route: Route,
     operations: Vec<Operation>,
+    operation_handlers: HashMap<Operation, OperationHandler>,
     requests_awaits: HashMap<String, Request>,
     statistics: ServiceStatistics,
-    node: Option<Addr<Node>>,
+    node: Addr<Node>,
+    next: Option<Recipient<Parcel>>,
+    recipients: ServiceRecipients,
+    transport: Option<Transport>
 }
 
-impl ServiceImpl {
-    pub fn new(route: Route) -> Self {
+impl ServiceCore {
+    pub fn new(service_name: String, node: Addr<Node>, next: Option<Recipient<Parcel>>) -> Self {
+        let route= Route::new().set_service_name(service_name).clone();
         Self {
             route,
             operations: vec![],
+            operation_handlers: Default::default(),
             requests_awaits: Default::default(),
             statistics: ServiceStatistics::new(),
-            node: None
+            node,
+            next,
+            recipients: ServiceRecipients { tick: None, parcel: None },
+            transport: None
         }
+    }
+
+    pub fn route(&self) -> &Route {
+        &self.route
+    }
+
+    pub fn add_operation(&mut self, operation: Operation) {
+        self.operations.push(operation);
+    }
+
+    pub fn tick_recipient(&mut self, recipient: Recipient<Tick>) {
+        self.recipients.tick = Some(recipient);
+    }
+}
+
+impl Actor for ServiceCore {
+    type Context = Context<Self>;
+}
+
+impl Handler<Parcel> for ServiceCore {
+    type Result = ();
+
+    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
+
     }
 }
 

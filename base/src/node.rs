@@ -1,10 +1,10 @@
 use crate::route::Route;
 use std::collections::HashMap;
 use crate::transport::Transport;
-use actix::{Actor, Context, Handler, AsyncContext, Message};
+use actix::{Actor, Context, Handler, AsyncContext};
 use crate::message::{Parcel, Request};
-use crate::signal::{RegisterServiceInNodeSignal, Heartbeat};
-use crate::service::ServiceImpl;
+use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick};
+use crate::service::{ServiceCore};
 use log::{trace, error};
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex};
@@ -88,10 +88,6 @@ impl Node {
             }
         }
     }
-
-    pub fn add_service(&mut self, service: ServiceImpl) {
-
-    }
 }
 
 impl Actor for Node {
@@ -126,12 +122,14 @@ impl Handler<Parcel> for Node {
 
         match messages.contains_key(parcel.route_sheet().target()) {
             true => {
+                trace!("Saving message to node");
                 match messages.get_mut(parcel.route_sheet().target()) {
                     Some(vec) => vec.push(parcel),
                     None => {}
                 }
             }
             false => {
+                trace!("Saving new message to node");
                 messages.insert(parcel.route_sheet().target().clone(), vec![parcel]);
             }
         };
@@ -146,27 +144,12 @@ impl Handler<Heartbeat> for Node {
     }
 }
 
-struct Tick {
-    time: Instant,
-}
 
-impl Tick {
-    pub fn new() -> Self {
-        Self {
-            time: Instant::now()
-        }
-    }
-}
-
-impl Message for Tick {
-    type Result = ();
-}
 
 impl Handler<Tick> for Node {
     type Result = ();
 
     fn handle(&mut self, tick: Tick, ctx: &mut Self::Context) -> Self::Result {
-        trace!("Tick {}", tick.time.elapsed().as_millis());
         let mut messages = match self.messages.lock() {
             Ok(messages) => messages,
             Err(e) => {
@@ -176,7 +159,6 @@ impl Handler<Tick> for Node {
         };
 
         if messages.len() == 0 {
-            trace!("No parcels");
         }
 
         for (route, parcels) in messages.iter_mut() {

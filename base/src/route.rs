@@ -1,9 +1,12 @@
+use semver::Version;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Route {
     route: String,
     node_name: String,
     service_name: String,
     operation_name: String,
+    operation_version: Option<Version>,
     inner_id: String,
 }
 
@@ -14,6 +17,7 @@ impl Route {
             node_name: "".to_string(),
             service_name: "".to_string(),
             operation_name: "".to_string(),
+            operation_version: None,
             inner_id: "".to_string(),
         }
     }
