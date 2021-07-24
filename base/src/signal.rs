@@ -10,5 +10,8 @@ impl Message for GetMessagesSignal { type Result = Result<Option<Parcel>, Error>
 pub struct HasRouteSignal { route: Route }
 impl Message for HasRouteSignal { type Result = Result<bool, Error>; }
 
-pub struct RegisterServiceInNodeSignal { pub transport: Transport }
+pub struct RegisterServiceInNodeSignal { pub transport: Transport, pub name: String }
 impl Message for RegisterServiceInNodeSignal { type Result = (); }
+
+pub struct Heartbeat {}
+impl Message for Heartbeat { type Result = (); }

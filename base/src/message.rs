@@ -1,21 +1,22 @@
 use actix::Message;
 use crate::route::{RouteSheet, Route};
 use std::time::Duration;
-
+use crate::operation::Operation;
+use log::trace;
 
 
 #[derive(Debug, Clone)]
 pub struct BaseMessage {
     data: Vec<u8>,
-    operation: Option<String>,
+    operation: Option<Operation>,
 }
 
 impl BaseMessage {
-    pub fn new(data: Vec<u8>, operation: Option<String>) -> Self {
+    pub fn new(data: Vec<u8>, operation: Option<Operation>) -> Self {
         Self { data, operation }
     }
 
-    pub fn operation(&self) -> Option<String> {
+    pub fn operation(&self) -> Option<Operation> {
         self.operation.clone()
     }
 
@@ -29,17 +30,41 @@ impl BaseMessage {
 //     route_sheet: RouteSheet
 // }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Parcel {
+    message_type: String,
     route_sheet: RouteSheet,
     messages: Vec<BaseMessage>,
     ttl: Option<Duration>,
 }
 
-impl Parcel {
-    pub fn new(messages: Vec<BaseMessage>, route_sheet: RouteSheet) -> Self {
-        Self { route_sheet, messages, ttl: None }
+impl Clone for Parcel {
+    fn clone(&self) -> Self {
+        trace!("Cloning parcel");
+        Self {
+            message_type: self.message_type.clone(),
+            route_sheet: self.route_sheet.clone(),
+            messages: self.messages.clone(),
+            ttl: self.ttl.clone()
+        }
     }
+
+    fn clone_from(&mut self, source: &Self) {
+        trace!("Cloning parcel");
+
+        self.ttl = source.ttl.clone();
+        self.route_sheet = source.route_sheet.clone();
+        self.messages = source.messages.clone();
+        self.message_type = source.message_type.clone();
+    }
+}
+
+impl Parcel {
+    pub fn new(message_type: String, messages: Vec<BaseMessage>, route_sheet: RouteSheet) -> Self {
+        Self { message_type, route_sheet, messages, ttl: None }
+    }
+
+    pub fn message_type(&self) -> &String { &self.message_type }
 
     pub fn target(&self) -> &Route {
         self.route_sheet.target()
@@ -49,8 +74,8 @@ impl Parcel {
         &self.route_sheet
     }
 
-    pub fn unpack(&self) -> Vec<BaseMessage> {
-        self.messages.clone()
+    pub fn unpack(&self) -> &Vec<BaseMessage> {
+        &self.messages
     }
 }
 
@@ -92,29 +117,4 @@ impl Request {
     pub fn route_sheet(&self) -> &RouteSheet {
         &self.route_sheet
     }
-}
-
-#[cfg(test)]
-mod test_messages {
-    use crate::message::Request;
-    use crate::route::{RouteSheet, Route};
-
-    #[test]
-    fn test_message() {
-        let body = "Hello!".to_string();
-        let route_sheet = RouteSheet::new(
-            Route::new("target".to_string()),
-            Route::new("this".to_string())
-        );
-        let request = Request::new(body.clone().into_bytes(), route_sheet);
-        let guid = request.guid();
-
-
-        assert!(guid.len() > 0);
-        assert_eq!(guid.len(), 22);
-        assert_eq!(String::from_utf8(request.body).unwrap(), body);
-    }
-
-
-
 }

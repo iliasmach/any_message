@@ -12,7 +12,7 @@ impl Transport {
         Transport { target, is_open: true }
     }
 
-    pub async fn send_parcel(&self, parcel: Parcel) {
+    pub async fn send_parcel(&self, parcel: &Parcel) {
         match self.target.send(parcel.clone()).await {
             Ok(result) => {},
             Err(e) => {
