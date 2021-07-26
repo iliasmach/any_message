@@ -9,32 +9,63 @@ use chrono::{NaiveDateTime, Utc};
 use crate::node::{Node};
 use semver::Version;
 use crate::transport::Transport;
+use crate::core::Core;
+use actix::dev::ToEnvelope;
 
-pub trait Service: Handler<Parcel> + Sized {
-    fn new(name:String, node: Addr<Node>) -> Self;
-    fn build(&self) -> Addr<ServiceCore>;
+pub trait Service {
+    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized;
+}
+
+pub trait ServiceRecipient<T: Actor + Handler<Tick> + Handler<Parcel>>
+    where <T as Actor>::Context: ToEnvelope<T, Tick>,
+          <T as Actor>::Context: ToEnvelope<T, Parcel> {
+    fn recipients(&self) -> ServiceRecipients;
+}
+
+impl<T: Actor + Handler<Tick> + Handler<Parcel>> ServiceRecipient<T> for Addr<T>
+    where <T as Actor>::Context: ToEnvelope<T, Parcel>,
+          <T as Actor>::Context: ToEnvelope<T, Tick>
+{
+    fn recipients(&self) -> ServiceRecipients
+        where <T as Actor>::Context: ToEnvelope<T, Tick>,
+              <T as Actor>::Context: ToEnvelope<T, Parcel>
+    {
+        let tick = self.clone().recipient::<Tick>();
+        let parcel = self.clone().recipient::<Parcel>();
+        ServiceRecipients::new(tick, parcel)
+    }
 }
 
 pub struct ServiceRecipients {
-    tick: Option<Recipient<Tick>>,
-    parcel: Option<Recipient<Parcel>>,
+    tick: Recipient<Tick>,
+    parcel: Recipient<Parcel>,
+}
+
+impl ServiceRecipients {
+    pub fn new(tick: Recipient<Tick>,
+               parcel: Recipient<Parcel>) -> Self {
+        Self {
+            tick,
+            parcel,
+        }
+    }
 }
 
 pub struct ServiceCore {
     route: Route,
     operations: Vec<Operation>,
-    operation_handlers: HashMap<Operation, OperationHandler>,
+    operation_handlers: HashMap<Operation, Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send>>,
     requests_awaits: HashMap<String, Request>,
     statistics: ServiceStatistics,
     node: Addr<Node>,
     next: Option<Recipient<Parcel>>,
-    recipients: ServiceRecipients,
-    transport: Option<Transport>
+    recipients: Option<ServiceRecipients>,
+    transport: Option<Transport>,
 }
 
 impl ServiceCore {
     pub fn new(service_name: String, node: Addr<Node>) -> Self {
-        let route= Route::new().set_service_name(service_name).clone();
+        let route = Route::new().set_service_name(service_name).clone();
         Self {
             route,
             operations: vec![],
@@ -43,8 +74,8 @@ impl ServiceCore {
             statistics: ServiceStatistics::new(),
             node,
             next: None,
-            recipients: ServiceRecipients { tick: None, parcel: None },
-            transport: None
+            recipients: None,
+            transport: None,
         }
     }
 
@@ -56,8 +87,22 @@ impl ServiceCore {
         self.operations.push(operation);
     }
 
-    pub fn tick_recipient(&mut self, recipient: Recipient<Tick>) {
-        self.recipients.tick = Some(recipient);
+    pub fn recipients(&mut self, reciptients: ServiceRecipients) {
+        self.recipients = Some(reciptients);
+    }
+
+    pub fn next(&self) -> Option<Recipient<Parcel>> {
+        self.next.clone()
+    }
+
+    pub fn node(&self) -> Addr<Node> {
+        self.node.clone()
+    }
+
+    pub fn operation_handler<F>(&mut self, operation: Operation, handler: F)
+        where F: Fn(&BaseMessage) -> Result<(), Error> + Clone + 'static + Send
+    {
+        self.operation_handlers.insert(operation, Box::new(handler));
     }
 }
 
@@ -68,9 +113,7 @@ impl Actor for ServiceCore {
 impl Handler<Parcel> for ServiceCore {
     type Result = ();
 
-    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
-
-    }
+    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {}
 }
 
 pub struct ServiceStatistics {

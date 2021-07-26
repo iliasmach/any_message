@@ -1,16 +1,18 @@
 extern crate log;
 
+
 use base::signal::{GetMessagesSignal, RegisterServiceInNodeSignal, Tick};
 use base::error::Error;
 use base::message::{Parcel, BaseMessage};
 use telnet::{Telnet, TelnetEvent};
 use base::route::{RouteSheet, Route, Target};
 use log::{debug, info, trace};
-use base::service::{ServiceCore};
+use base::service::{ServiceCore, Service};
 use base::transport::Transport;
 use std::time::Duration;
 use base::node::{Node};
 use actix::prelude::*;
+use base::core::Core;
 
 pub struct TelnetService {
     host: String,
@@ -19,13 +21,13 @@ pub struct TelnetService {
     connection: Telnet,
     buf: String,
     ping_interval_in_millis: Option<u64>,
-    service_core: Recipient<Parcel>,
     messages: Vec<BaseMessage>,
+    send_to: Recipient<Parcel>,
 }
 
 
 impl TelnetService {
-    pub fn new(recipient: Recipient<Parcel>, host: String, port: u16, buff_size: u32, ping_interval_in_millis: Option<u64>) -> Self {
+    pub fn new(send_to: Recipient<Parcel>, host: String, port: u16, buff_size: u32, ping_interval_in_millis: Option<u64>) -> Self {
         info!("Connection to {}:{}", host, port);
 
         let connection = match Telnet::connect((host.clone().as_str(), port.clone()), buff_size.clone() as usize) {
@@ -42,15 +44,15 @@ impl TelnetService {
             connection,
             buf: String::with_capacity(buff_size as usize),
             ping_interval_in_millis,
-            service_core: recipient,
             messages: vec![],
+            send_to,
         };
 
         this
     }
 
     pub fn read_messages(&mut self) {
-        let event = match self.connection.read_timeout(Duration::from_secs(2)) {
+        let event = match self.connection.read_timeout(Duration::from_millis(50)) {
             Ok(event) => event,
             Err(_e) => {
                 debug!("Read 2 secs");
@@ -70,11 +72,15 @@ impl TelnetService {
     }
 
     pub fn send_messages(&mut self) {
+        if self.messages.is_empty() {
+            return;
+        }
+        trace!("Try to send");
         let messages = self.messages.clone();
         self.messages.clear();
-        let service = self.service_core.clone();
+
         trace!("Sending messages");
-        service.do_send(
+        self.send_to.do_send(
             Parcel::new(messages, RouteSheet::new(
                 Target::Consumer("Telnet Message".to_string()), Route::new(),
             )));
@@ -92,7 +98,6 @@ impl Actor for TelnetService {
             Duration::from_millis(
                 self.ping_interval_in_millis.unwrap()),
             |this, _this_ctx| {
-                info!("try to read");
                 this.read_messages();
             },
         );
@@ -104,6 +109,28 @@ impl Actor for TelnetService {
                 this.send_messages();
             },
         );
+    }
+}
+
+impl Service for TelnetService {
+    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
+        todo!()
+    }
+}
+
+impl Handler<Parcel> for TelnetService {
+    type Result = ();
+
+    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    }
+}
+
+impl Handler<Tick> for TelnetService {
+    type Result = ();
+
+    fn handle(&mut self, msg: Tick, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
     }
 }
 
@@ -119,8 +146,10 @@ mod tests {
     use actix_rt::System;
     use base::message::{BaseMessage, Parcel};
     use base::core::{Core, CoreBuilder};
-    use base::service::ServiceCore;
+    use base::service::{ServiceCore, Service, ServiceRecipients, ServiceRecipient};
     use log::info;
+    use base::operation::{OperationHandler, Operation};
+    use semver::Version;
 
     #[test]
     fn it_works() {
@@ -135,19 +164,20 @@ mod tests {
                 Node::new("telnet".to_string())
             }).await;
 
-            let telnet = TelnetService::new(core.node().recipient::<Parcel>(),
-                                            "185.179.2.33".to_string(),
-                                            5038,
-                                            10000000,
-                                            Some(50));
+
+            let telnet = TelnetService::new(
+                "185.179.2.33".to_string(),
+                5038,
+                10000000,
+                Some(50));
 
             let telnet_service = TelnetService::start(telnet);
 
-            core.service("telnet".to_string(), None, move |mut service_core, node, core| {
-                info!("Registering Telnet");
 
-                service_core
-            }).await;
+            core.service(
+                "telnet".to_string(),
+                telnet_service.recipients(),
+                Box::new(TelnetService::config_system)).await;
 
             core.run().await;
         });

@@ -1,5 +1,5 @@
 [package]
-name = "telnet"
+name = "any-message-telnet"
 version = "0.1.0"
 authors = ["Ilias Makhiyanov <iliasmach@cloud-mind.com>"]
 edition = "2018"
@@ -14,3 +14,5 @@ telnet = "0.1.4"
 log="0.4.14"
 dotenv="0.15.0"
 env_logger = "0.9.0"
+semver="1.0.3"
+

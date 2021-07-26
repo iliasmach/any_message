@@ -1,12 +1,12 @@
 use crate::error::Error;
 use crate::node::Node;
 use std::collections::HashMap;
-use actix::{Addr, Arbiter, Actor, System, ArbiterHandle, Recipient};
+use actix::{Addr, Arbiter, Actor, System, ArbiterHandle, Recipient, Context};
 use crate::signal::{Heartbeat, RegisterServiceInNodeSignal};
 use std::time::Duration;
 use log::{info, trace};
 use lazy_static::lazy_static;
-use crate::service::{ServiceCore};
+use crate::service::{ServiceCore, ServiceRecipients, Service};
 use crate::transport::Transport;
 use crate::message::Parcel;
 
@@ -70,15 +70,16 @@ impl Core {
         self.node.clone()
     }
 
-    pub async fn service<F:Fn(ServiceCore, Addr<Node>, &Core)->ServiceCore>(&self, service_name:String, next: Option<Recipient<Parcel>>, mut config: F) -> Addr<ServiceCore> {
-        let service_core = config(ServiceCore::new(service_name.clone(), self.node.clone()), self.node.clone(), self);
+    pub async fn service<F: Fn(&mut ServiceCore, Addr<Node>, &Core)>(&self, service_name: String,  mut config: F) -> Addr<ServiceCore> {
+        let mut service_core = ServiceCore::new(service_name.clone(), self.node.clone());
+        config(&mut service_core, self.node.clone(), self);
 
         let arbiter = Arbiter::new().handle();
 
         let service_addr = ServiceCore::start_in_arbiter(&arbiter, |ctx| {
             service_core
         });
-        
+
         self.node.send(RegisterServiceInNodeSignal {
             transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
             name: service_name,

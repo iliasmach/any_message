@@ -2,7 +2,7 @@ use semver::Version;
 use crate::message::BaseMessage;
 use crate::error::Error;
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, Eq)]
 pub struct Operation {
     name: String,
     version: Version,
@@ -10,7 +10,7 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn new(name:String, version: Version, description: String, operation: Box<dyn Fn(&BaseMessage) -> Result<(), Error>>) -> Self {
+    pub fn new(name:String, version: Version, description: String) -> Self {
         Self {
             name,
             version,
@@ -35,6 +35,6 @@ impl PartialEq for Operation {
     }
 }
 
-pub struct OperationHandler {
-    handler: Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send> ,
+pub struct OperationHandler<F> {
+    pub handler: F,
 }

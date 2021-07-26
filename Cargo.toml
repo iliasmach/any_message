@@ -16,5 +16,5 @@ members = [
     "base",
     "rabbitmq",
     "redis",
-    "telnet"
+    "any-message-telnet"
 ]
