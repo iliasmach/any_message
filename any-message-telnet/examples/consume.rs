@@ -25,7 +25,7 @@ impl Handler<Parcel> for Consumer {
     type Result = ();
 
     fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
-        trace!("{:?}", msg);
+        trace!("Consuming {:?}", msg);
     }
 }
 
@@ -43,7 +43,7 @@ fn main() {
 
         let consumer = Consumer{};
 
-        core.service("Consumer".to_string(), Box::new(Consumer::config_system));
+        core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
 
         TelnetService::new(
             consumer.start().recipient::<Parcel>(),

@@ -1,7 +1,7 @@
 use actix::Recipient;
 use crate::message::Parcel;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transport {
     target: Recipient<Parcel>,
     is_open: bool,

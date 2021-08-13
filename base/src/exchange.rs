@@ -1,6 +1,5 @@
 use actix::{Actor, Context, Recipient, Handler};
 use crate::message::Parcel;
-use std::option::Iter;
 use std::collections::VecDeque;
 use log::{error, trace};
 
@@ -45,6 +44,7 @@ impl Handler<Parcel> for Exchange {
                 match self.recipients.get(self.next) {
                     Some(recipient) => {
                         recipient.do_send(msg.clone());
+                        self.next = self.next + 1;
                     },
                     None => {
                         error!("Can`t send message to recipient {}", self.next);

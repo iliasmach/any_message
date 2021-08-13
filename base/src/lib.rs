@@ -10,4 +10,6 @@ pub mod route;
 pub mod operation;
 pub mod core;
 mod tests;
+pub mod topology;
+pub mod gateway;
 

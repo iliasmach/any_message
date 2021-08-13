@@ -83,7 +83,7 @@ impl Core {
         self.node.send(RegisterServiceInNodeSignal {
             transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
             name: service_name,
-        });
+        }).await;
 
         service_addr
     }

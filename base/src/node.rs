@@ -4,15 +4,15 @@ use crate::transport::Transport;
 use actix::{Actor, Context, Handler, AsyncContext};
 use crate::message::{Parcel, Request};
 use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick};
-use crate::service::{ServiceCore};
 use log::{trace, error};
-use std::time::{Instant, Duration};
+use std::time::{Duration};
 use std::sync::{Arc, Mutex};
+use crate::topology::Topology;
 
 #[allow(dead_code)]
 pub struct Node {
     route: Route,
-    node_addresses: HashMap<String, Transport>,
+    topology: Topology,
     services: HashMap<String, Transport>,
     operations: HashMap<String, Transport>,
     messages: Arc<Mutex<HashMap<Target, Vec<Parcel>>>>,
@@ -25,7 +25,7 @@ impl Node {
         route.set_node_name(node_name);
         Self {
             route,
-            node_addresses: Default::default(),
+            topology: Topology::new(),
             services: Default::default(),
             operations: Default::default(),
             messages: Default::default(),
@@ -38,56 +38,7 @@ impl Node {
         &self.route
     }
 
-    pub fn has_route(&self, route: Route) -> bool {
-        let target = route.as_string();
-        match self.services.contains_key(&*target) {
-            false => {
-                match self.node_addresses.contains_key(&*target) {
-                    true => {
-                        true
-                    }
-                    false => false
-                }
-            }
-            true => {
-                let transport_ref = self.services.get(&*target);
-                if transport_ref.is_some() {
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
 
-    pub fn find_transport_for_target(&self, target: &Target) -> Option<Transport> {
-        trace!("Finding transport for route {}", target.as_string());
-        let string_target = target.as_string();
-
-        match self.services.contains_key(&*string_target) {
-            false => {
-                match self.node_addresses.contains_key(&*string_target) {
-                    true => {
-                        let transport_ref = self.node_addresses.get(&*string_target);
-                        if transport_ref.is_some() {
-                            Some(transport_ref.unwrap().clone())
-                        } else {
-                            None
-                        }
-                    }
-                    false => None
-                }
-            }
-            true => {
-                let transport_ref = self.services.get(&string_target);
-                if transport_ref.is_some() {
-                    Some(transport_ref.unwrap().clone())
-                } else {
-                    None
-                }
-            }
-        }
-    }
 }
 
 impl Actor for Node {
@@ -103,6 +54,7 @@ impl Handler<RegisterServiceInNodeSignal> for Node {
     type Result = ();
 
     fn handle(&mut self, msg: RegisterServiceInNodeSignal, _ctx: &mut Context<Self>) -> Self::Result {
+        trace!("Registering service {} transport {:?}", msg.name, msg.transport);
         self.services.insert(msg.name, msg.transport);
     }
 }
@@ -115,7 +67,7 @@ impl Handler<Parcel> for Node {
         let mut messages = match self.messages.lock() {
             Ok(messages) => messages,
             Err(e) => {
-                error!("Error to access messages");
+                error!("Error to access messages {:?}", e);
                 return;
             }
         };
@@ -145,7 +97,6 @@ impl Handler<Heartbeat> for Node {
 }
 
 
-
 impl Handler<Tick> for Node {
     type Result = ();
 
@@ -158,11 +109,10 @@ impl Handler<Tick> for Node {
             }
         };
 
-        if messages.len() == 0 {
-        }
+        if messages.len() == 0 {}
 
         for (route, parcels) in messages.iter_mut() {
-            match self.find_transport_for_target(route) {
+            match self.topology.find_transport_for_target(route) {
                 Some(transport) => {
                     for parcel in parcels.drain(..) {
                         transport.send_parcel(&parcel);
