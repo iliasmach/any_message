@@ -51,7 +51,9 @@ fn main() {
     });
     System::new().block_on(async move {
         let mut core = CoreBuilder::new(|| {
-            Node::new("telnet".to_string())
+            let node = Node::new("telnet".to_string());
+
+            node
         }).await;
 
         let service = core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
