@@ -13,6 +13,8 @@ use std::time::Duration;
 use base::node::{Node};
 use actix::prelude::*;
 use base::core::Core;
+use base::operation::Operation;
+use semver::Version;
 
 pub struct TelnetService {
     host: String,
@@ -23,11 +25,17 @@ pub struct TelnetService {
     ping_interval_in_millis: Option<u64>,
     messages: Vec<BaseMessage>,
     send_to: Recipient<Parcel>,
+    message_type: String,
 }
 
 
 impl TelnetService {
-    pub fn new(send_to: Recipient<Parcel>, host: String, port: u16, buff_size: u32, ping_interval_in_millis: Option<u64>) -> Self {
+    pub fn new(send_to: Recipient<Parcel>,
+               message_type: String,
+               host: String,
+               port: u16,
+               buff_size: u32,
+               ping_interval_in_millis: Option<u64>) -> Self {
         info!("Connection to {}:{}", host, port);
 
         let connection = match Telnet::connect((host.clone().as_str(), port.clone()), buff_size.clone() as usize) {
@@ -46,9 +54,16 @@ impl TelnetService {
             ping_interval_in_millis,
             messages: vec![],
             send_to,
+            message_type
         };
 
         this
+    }
+
+    pub fn message_type(&mut self, message_type: String) -> &mut Self {
+        self.message_type = message_type;
+
+        self
     }
 
     pub fn read_messages(&mut self) {
@@ -82,7 +97,7 @@ impl TelnetService {
         trace!("Sending messages");
         self.send_to.do_send(
             Parcel::new(messages, RouteSheet::new(
-                Target::Consumer("Telnet Message".to_string()), Route::new(),
+                Target::Consumer(self.message_type.clone()), Route::new(),
             )));
     }
 }
@@ -113,8 +128,16 @@ impl Actor for TelnetService {
 }
 
 impl Service for TelnetService {
-    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
-        todo!()
+    fn config_system(service_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
+        service_core.add_operation(
+            Operation::new(
+                "SendMessageToTelnet".to_string(),
+                Version::new(1, 0,0),
+                "".to_string()
+            )
+        );
+
+        service_core.set_consuming_messages_types(vec!["TelnetCommand".to_string()]);
     }
 }
 
@@ -122,7 +145,7 @@ impl Handler<Parcel> for TelnetService {
     type Result = ();
 
     fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
-        todo!()
+        trace!("Consuming message in telnet {:?}", msg);
     }
 }
 
@@ -166,6 +189,8 @@ mod tests {
 
 
             let telnet = TelnetService::new(
+                core.node().recipient::<Parcel>(),
+                "TelnetMesage".to_string(),
                 "185.179.2.33".to_string(),
                 5038,
                 10000000,
@@ -177,7 +202,7 @@ mod tests {
             core.service(
                 "telnet".to_string(),
                 telnet_service.recipients(),
-                Box::new(TelnetService::config_system)).await;
+                ).await;
 
             core.run().await;
         });

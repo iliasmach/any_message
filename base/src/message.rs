@@ -74,6 +74,12 @@ impl Parcel {
     }
 }
 
+impl Drop for Parcel {
+    fn drop(&mut self) {
+        trace!("Dropping parcel!");
+    }
+}
+
 // impl Message for Envelope {
 //     type Result = ();
 // }

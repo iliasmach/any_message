@@ -1,5 +1,6 @@
 use actix::Recipient;
 use crate::message::Parcel;
+use log::{trace, error};
 
 #[derive(Clone, Debug)]
 pub struct Transport {
@@ -12,13 +13,9 @@ impl Transport {
         Transport { target, is_open: true }
     }
 
-    pub async fn send_parcel(&self, parcel: &Parcel) {
-        match self.target.send(parcel.clone()).await {
-            Ok(result) => {},
-            Err(e) => {
-
-            }
-        }
+    pub fn send_parcel(&self, parcel: Parcel) {
+        trace!("Sending parcel");
+        self.target.do_send(parcel);
     }
 
     pub fn is_open(&self) -> bool {

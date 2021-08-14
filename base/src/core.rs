@@ -75,6 +75,8 @@ impl Core {
         config(&mut service_core, self.node.clone(), self);
 
         let arbiter = Arbiter::new().handle();
+        let consumed_messages = service_core.get_consuming_message_types();
+        let operations = service_core.get_operations().clone();
 
         let service_addr = ServiceCore::start_in_arbiter(&arbiter, |ctx| {
             service_core
@@ -83,6 +85,8 @@ impl Core {
         self.node.send(RegisterServiceInNodeSignal {
             transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
             name: service_name,
+            operations: operations.clone(),
+            consume_messages: consumed_messages
         }).await;
 
         service_addr

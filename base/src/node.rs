@@ -1,9 +1,9 @@
 use crate::route::{Route, Target};
 use std::collections::HashMap;
 use crate::transport::Transport;
-use actix::{Actor, Context, Handler, AsyncContext};
+use actix::{Actor, Context, Handler, AsyncContext, ResponseFuture};
 use crate::message::{Parcel, Request};
-use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick};
+use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick, LinkService};
 use log::{trace, error};
 use std::time::{Duration};
 use std::sync::{Arc, Mutex};
@@ -37,8 +37,6 @@ impl Node {
     pub fn route(&self) -> &Route {
         &self.route
     }
-
-
 }
 
 impl Actor for Node {
@@ -55,7 +53,17 @@ impl Handler<RegisterServiceInNodeSignal> for Node {
 
     fn handle(&mut self, msg: RegisterServiceInNodeSignal, _ctx: &mut Context<Self>) -> Self::Result {
         trace!("Registering service {} transport {:?}", msg.name, msg.transport);
-        self.services.insert(msg.name, msg.transport);
+        self.services.insert(msg.name, msg.transport.clone());
+
+        for message_type in msg.consume_messages {
+            let target = Target::Consumer(message_type);
+            self.topology.add_subscriber(target.as_string(), msg.transport.clone());
+        }
+
+        for operation in msg.operations {
+            let route = Route::new().set_operation_name(operation.name().clone()).clone();
+            self.topology.add_target_transport(Target::Route(route.clone()), msg.transport.clone());
+        }
     }
 }
 
@@ -97,10 +105,13 @@ impl Handler<Heartbeat> for Node {
 }
 
 
+
 impl Handler<Tick> for Node {
     type Result = ();
 
     fn handle(&mut self, tick: Tick, ctx: &mut Self::Context) -> Self::Result {
+        ctx.notify_later(Tick::new(), Duration::from_millis(10));
+
         let mut messages = match self.messages.lock() {
             Ok(messages) => messages,
             Err(e) => {
@@ -109,22 +120,41 @@ impl Handler<Tick> for Node {
             }
         };
 
-        if messages.len() == 0 {}
+        for (target, parcels) in messages.iter_mut() {
+            if parcels.len() == 0 {
+                continue;
+            }
 
-        for (route, parcels) in messages.iter_mut() {
-            match self.topology.find_transport_for_target(route) {
-                Some(transport) => {
-                    for parcel in parcels.drain(..) {
-                        transport.send_parcel(&parcel);
+            match &target {
+                Target::Route(route) => {
+                    match self.topology.find_transport_for_route(route) {
+                        Some(transport) => {
+                            for parcel in parcels.drain(..) {
+                                transport.send_parcel(parcel);
+                            }
+                        }
+                        None => {
+                            trace!("No transport for route {}", route.as_string());
+                            continue;
+                        }
                     }
                 }
-                None => {
-                    trace!("No transport for route {}", route.as_string());
-                    continue;
+                Target::Consumer(message_type) => {
+                    match self.topology.find_consumers_for_message(&target.as_string()) {
+                        Some(transports) => {
+                            for parcel in parcels.drain(..) {
+                                for transport in transports {
+                                    transport.send_parcel(parcel.clone());
+                                }
+                            }
+                        }
+                        None => {
+                            trace!("No transport for message type {}", message_type);
+                            continue;
+                        }
+                    }
                 }
             }
         }
-
-        ctx.notify_later(Tick::new(), Duration::from_millis(10));
     }
 }

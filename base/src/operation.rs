@@ -17,6 +17,10 @@ impl Operation {
             description,
         }
     }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
 }
 
 pub enum OperationError {

@@ -1,6 +1,6 @@
 use crate::route::{Route, RouteSheet};
 use actix::{Recipient, Handler, Addr, Actor, Context};
-use crate::signal::{RegisterServiceInNodeSignal, GetMessagesSignal, Tick};
+use crate::signal::{RegisterServiceInNodeSignal, GetMessagesSignal, Tick, LinkService};
 use crate::error::Error;
 use crate::message::{BaseMessage, Parcel, Request};
 use crate::operation::{Operation, OperationHandler};
@@ -11,6 +11,7 @@ use semver::Version;
 use crate::transport::Transport;
 use crate::core::Core;
 use actix::dev::ToEnvelope;
+use log::trace;
 
 pub trait Service {
     fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized;
@@ -34,6 +35,7 @@ impl<T: Actor + Handler<Tick> + Handler<Parcel>> ServiceRecipient<T> for Addr<T>
         let parcel = self.clone().recipient::<Parcel>();
         ServiceRecipients::new(tick, parcel)
     }
+
 }
 
 pub struct ServiceRecipients {
@@ -54,6 +56,7 @@ impl ServiceRecipients {
 pub struct ServiceCore {
     route: Route,
     operations: Vec<Operation>,
+    consume_message_types: Vec<String>,
     operation_handlers: HashMap<Operation, Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send>>,
     requests_awaits: HashMap<String, Request>,
     statistics: ServiceStatistics,
@@ -69,6 +72,7 @@ impl ServiceCore {
         Self {
             route,
             operations: vec![],
+            consume_message_types: vec![],
             operation_handlers: Default::default(),
             requests_awaits: Default::default(),
             statistics: ServiceStatistics::new(),
@@ -79,12 +83,27 @@ impl ServiceCore {
         }
     }
 
+    pub fn link(service: Addr<ServiceCore>, recipients: ServiceRecipients) {
+        service.do_send(LinkService{ recipients })
+    }
+
     pub fn route(&self) -> &Route {
         &self.route
     }
 
     pub fn add_operation(&mut self, operation: Operation) {
         self.operations.push(operation);
+    }
+    pub fn get_operations(&self) -> &Vec<Operation> {
+        &self.operations
+    }
+
+    pub fn set_consuming_messages_types(&mut self, message_types: Vec<String>) {
+        self.consume_message_types = message_types;
+    }
+
+    pub fn get_consuming_message_types(&self) -> Vec<String> {
+        self.consume_message_types.clone()
     }
 
     pub fn recipients(&mut self, reciptients: ServiceRecipients) {
@@ -113,7 +132,25 @@ impl Actor for ServiceCore {
 impl Handler<Parcel> for ServiceCore {
     type Result = ();
 
-    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {}
+    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
+        trace!("[{:?}] Consuming in system",std::thread::current().id());
+        match &self.recipients {
+            None => {
+                self.node.do_send(msg);
+            },
+            Some(recepients) => {
+               recepients.parcel.do_send(msg);
+            }
+        }
+    }
+}
+
+impl Handler<LinkService> for ServiceCore {
+    type Result = ();
+
+    fn handle(&mut self, msg: LinkService, _ctx: &mut Self::Context) -> Self::Result {
+        self.recipients = Some(msg.recipients);
+    }
 }
 
 pub struct ServiceStatistics {
