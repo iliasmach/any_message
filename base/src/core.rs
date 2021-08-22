@@ -10,6 +10,8 @@ use crate::service::{ServiceCore, ServiceRecipients, Service};
 use crate::transport::Transport;
 use crate::message::Parcel;
 use crate::config::ServiceConfig;
+use crate::plugin::PluginManager;
+use std::ffi::OsStr;
 
 type ServiceTypeName = String;
 
@@ -18,25 +20,49 @@ pub struct CoreBuilder<F>
         F: Fn() -> Node,
 {
     factory: F,
-    service_factories: HashMap<ServiceTypeName, Box<dyn Fn(ServiceConfig) -> ServiceCore>>
+    service_factories: HashMap<ServiceTypeName, Box<dyn Fn(ServiceConfig) -> ServiceCore>>,
+    plugins: Vec<String>,
+    plugin_manager: PluginManager,
 }
 
 impl<F> CoreBuilder<F>
     where
         F: Fn() -> Node
 {
-    pub fn new(factory: F) -> Core {
-        let node = factory();
+    pub fn new(factory: F) -> CoreBuilder<F> {
+        let mut builder = CoreBuilder {
+            factory,
+            service_factories: Default::default(),
+            plugin_manager: PluginManager::new(),
+            plugins: vec![],
+        };
+
+        builder
+    }
+
+    pub fn plugins(&mut self, plugins: Vec<String>) -> &mut Self {
+        self.plugins = plugins;
+        self
+    }
+
+    pub unsafe fn build(&mut self) -> Core {
+        let node = (self.factory)();
 
         let arbiter = Arbiter::new().handle();
         let node = Node::start_in_arbiter(&arbiter, |ctx| {
             node
         });
 
-        Core {
+        let mut core = Core {
             arbiter,
             node,
+        };
+
+        for plugin in &self.plugins {
+            self.plugin_manager.load_plugin(plugin, &mut core);
         }
+
+        core
     }
 
     pub fn service_config(&mut self, service_type_name: ServiceTypeName, service_factory: Box<dyn Fn(ServiceConfig) -> ServiceCore>) {
@@ -78,7 +104,7 @@ impl Core {
         self.node.clone()
     }
 
-    pub async fn service<F: Fn(&mut ServiceCore, Addr<Node>, &Core)>(&self, service_name: String,  mut config: F) -> Addr<ServiceCore> {
+    pub async fn service<F: Fn(&mut ServiceCore, Addr<Node>, &Core)>(&self, service_name: String, mut config: F) -> Addr<ServiceCore> {
         let mut service_core = ServiceCore::new(service_name.clone(), self.node.clone());
         config(&mut service_core, self.node.clone(), self);
 
@@ -94,7 +120,7 @@ impl Core {
             transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
             name: service_name,
             operations: operations.clone(),
-            consume_messages: consumed_messages
+            consume_messages: consumed_messages,
         }).await;
 
         service_addr

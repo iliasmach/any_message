@@ -1,5 +1,5 @@
 use actix_rt::net::{TcpStream, TcpListener};
-use actix::{Actor, Addr};
+use actix::{Actor, Addr, Context};
 use crate::service::{Service, ServiceCore};
 use crate::node::Node;
 use crate::core::Core;
@@ -14,7 +14,7 @@ impl TcpService {
 }
 
 impl Actor for TcpService {
-    type Context = ();
+    type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         todo!()

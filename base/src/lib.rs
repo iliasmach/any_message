@@ -13,4 +13,6 @@ mod tests;
 pub mod topology;
 pub mod config;
 mod services;
+pub mod plugin;
+pub mod build;
 
