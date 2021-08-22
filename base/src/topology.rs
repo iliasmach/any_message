@@ -63,9 +63,6 @@ impl Topology {
         trace!("Finding transport for route {}", target.as_string());
         let string_target = target.as_string();
 
-        trace!("{:?}", self.route_table);
-        trace!("{:?}", self.subscribers);
-
         match self.route_table.contains_key(string_target.as_str()) {
             false => {
                 None
@@ -83,8 +80,6 @@ impl Topology {
     }
 
     pub fn find_consumers_for_message(&self, message_type: &String) -> Option<&Vec<Transport>> {
-        trace!("{:?}", self.route_table);
-        trace!("{:?}", self.subscribers);
         match self.subscribers.contains_key(message_type) {
             false => None,
             true => {

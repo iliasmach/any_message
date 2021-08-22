@@ -1,0 +1,21 @@
+Core:
+  name: "TestCore"
+
+Node:
+  name: "Node01"
+
+  ServiceOne:
+    name: "ServiceOne"
+    type: ""
+    operations:
+      TestOperation01:
+        name: "TestOperation01"
+        version: "0.1.12"
+        description: "TestOperation"
+    subscribe_on_messages:
+      - "TestMessage01"
+      - "TestMessage02"
+
+  ServiceTwo:
+    name: "ServiceTwo"
+

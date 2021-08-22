@@ -1,0 +1,28 @@
+use actix_rt::net::{TcpStream, TcpListener};
+use actix::{Actor, Addr};
+use crate::service::{Service, ServiceCore};
+use crate::node::Node;
+use crate::core::Core;
+
+pub struct TcpService {
+    listeners: TcpListener,
+    connections: TcpStream
+}
+
+impl TcpService {
+
+}
+
+impl Actor for TcpService {
+    type Context = ();
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        todo!()
+    }
+}
+
+impl Service for TcpService {
+    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
+        todo!()
+    }
+}

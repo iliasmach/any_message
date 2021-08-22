@@ -9,19 +9,23 @@ use lazy_static::lazy_static;
 use crate::service::{ServiceCore, ServiceRecipients, Service};
 use crate::transport::Transport;
 use crate::message::Parcel;
+use crate::config::ServiceConfig;
+
+type ServiceTypeName = String;
 
 pub struct CoreBuilder<F>
     where
-        F: Fn() -> Node
+        F: Fn() -> Node,
 {
     factory: F,
+    service_factories: HashMap<ServiceTypeName, Box<dyn Fn(ServiceConfig) -> ServiceCore>>
 }
 
 impl<F> CoreBuilder<F>
     where
         F: Fn() -> Node
 {
-    pub async fn new(factory: F) -> Core {
+    pub fn new(factory: F) -> Core {
         let node = factory();
 
         let arbiter = Arbiter::new().handle();
@@ -33,6 +37,10 @@ impl<F> CoreBuilder<F>
             arbiter,
             node,
         }
+    }
+
+    pub fn service_config(&mut self, service_type_name: ServiceTypeName, service_factory: Box<dyn Fn(ServiceConfig) -> ServiceCore>) {
+        self.service_factories.insert(service_type_name, service_factory);
     }
 }
 

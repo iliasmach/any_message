@@ -54,7 +54,7 @@ fn main() {
             let node = Node::new("telnet".to_string());
 
             node
-        }).await;
+        });
 
         let service = core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
         let telnet_service = core.service("Asterisk".to_string(), Box::new(TelnetService::config_system)).await;
