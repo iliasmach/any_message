@@ -1,6 +1,5 @@
 use semver::Version;
-use crate::message::BaseMessage;
-use crate::error::Error;
+
 
 #[derive(Clone, Debug, Hash, Eq)]
 pub struct Operation {

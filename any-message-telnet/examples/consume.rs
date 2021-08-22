@@ -2,12 +2,13 @@ use std::time::Duration;
 use actix::{System, Actor, Addr, Handler, Context};
 use base::core::{CoreBuilder, Core};
 use base::node::Node;
-use any_message_telnet::TelnetService;
-use base::message::Parcel;
+use base::message::{Parcel, BaseMessage};
 use base::service::{Service, ServiceCore, ServiceRecipients, ServiceRecipient};
 use log::trace;
 use base::signal::{Tick};
 use base::transport::Transport;
+use any_message_telnet::{TelnetService};
+
 
 #[derive(Clone)]
 pub struct Consumer {}
@@ -24,6 +25,10 @@ impl Actor for Consumer {
 impl Service for Consumer {
     fn config_system(service_code: &mut ServiceCore, node: Addr<Node>, core: &Core) {
         service_code.set_consuming_messages_types(vec!["Asterisk Message".to_string()]);
+    }
+
+    fn handle_message(&self, message: &BaseMessage) {
+        todo!()
     }
 }
 
@@ -50,11 +55,13 @@ fn main() {
         std::process::exit(0);
     });
     System::new().block_on(async move {
-        let mut core = CoreBuilder::new(|| {
-            let node = Node::new("telnet".to_string());
+        let mut core =  unsafe {
+            CoreBuilder::new(|| {
+                let node = Node::new("telnet".to_string());
 
-            node
-        });
+                node
+            }).plugins(vec!["target/debug/libany_message_telnet.dylib".to_string()]).build()
+        };
 
         let service = core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
         let telnet_service = core.service("Asterisk".to_string(), Box::new(TelnetService::config_system)).await;

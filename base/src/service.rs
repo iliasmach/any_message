@@ -1,20 +1,19 @@
-use crate::route::{Route, RouteSheet};
+use crate::route::{Route};
 use actix::{Recipient, Handler, Addr, Actor, Context};
-use crate::signal::{RegisterServiceInNodeSignal, GetMessagesSignal, Tick, LinkService};
-use crate::error::Error;
+use crate::signal::{Tick, LinkService};
 use crate::message::{BaseMessage, Parcel, Request};
-use crate::operation::{Operation, OperationHandler};
+use crate::operation::{Operation};
 use std::collections::HashMap;
 use chrono::{NaiveDateTime, Utc};
 use crate::node::{Node};
-use semver::Version;
 use crate::transport::Transport;
 use crate::core::Core;
 use actix::dev::ToEnvelope;
-use log::trace;
+use log::{trace,error};
 
 pub trait Service {
     fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized;
+    fn handle_message(&self, message: &BaseMessage);
 }
 
 pub trait ServiceRecipient<T: Actor + Handler<Tick> + Handler<Parcel>>
@@ -38,6 +37,7 @@ impl<T: Actor + Handler<Tick> + Handler<Parcel>> ServiceRecipient<T> for Addr<T>
 
 }
 
+#[derive(Debug)]
 pub struct ServiceRecipients {
     tick: Recipient<Tick>,
     parcel: Recipient<Parcel>,
@@ -53,11 +53,12 @@ impl ServiceRecipients {
     }
 }
 
+#[derive(Debug)]
 pub struct ServiceCore {
-    route: Route,
+    pub route: Route,
     operations: Vec<Operation>,
     consume_message_types: Vec<String>,
-    operation_handlers: HashMap<Operation, Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send>>,
+    //operation_handlers: HashMap<Operation, Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send>>,
     requests_awaits: HashMap<String, Request>,
     statistics: ServiceStatistics,
     node: Addr<Node>,
@@ -73,7 +74,7 @@ impl ServiceCore {
             route,
             operations: vec![],
             consume_message_types: vec![],
-            operation_handlers: Default::default(),
+         //   operation_handlers: Default::default(),
             requests_awaits: Default::default(),
             statistics: ServiceStatistics::new(),
             node,
@@ -117,12 +118,6 @@ impl ServiceCore {
     pub fn node(&self) -> Addr<Node> {
         self.node.clone()
     }
-
-    pub fn operation_handler<F>(&mut self, operation: Operation, handler: F)
-        where F: Fn(&BaseMessage) -> Result<(), Error> + Clone + 'static + Send
-    {
-        self.operation_handlers.insert(operation, Box::new(handler));
-    }
 }
 
 impl Actor for ServiceCore {
@@ -132,14 +127,19 @@ impl Actor for ServiceCore {
 impl Handler<Parcel> for ServiceCore {
     type Result = ();
 
-    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Parcel, _ctx: &mut Self::Context) -> Self::Result {
         trace!("[{:?}] Consuming in system",std::thread::current().id());
         match &self.recipients {
             None => {
                 self.node.do_send(msg);
             },
             Some(recepients) => {
-               recepients.parcel.do_send(msg);
+               match recepients.parcel.do_send(msg) {
+                   Err(e) => {
+                       error!("Error {:?}", e);
+                   },
+                   _ => {}
+               }
             }
         }
     }
@@ -153,6 +153,7 @@ impl Handler<LinkService> for ServiceCore {
     }
 }
 
+#[derive(Debug)]
 pub struct ServiceStatistics {
     start_time: NaiveDateTime,
     messages_handled: u64,

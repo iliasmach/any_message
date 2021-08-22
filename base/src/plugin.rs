@@ -43,6 +43,7 @@ impl PluginManager {
     }
 
     pub unsafe fn load_plugin<P: AsRef<OsStr>>(&mut self, filename: P, core: &mut Core) -> Result<(), Box<dyn Error>> {
+        info!("Loading plugin");
         type PluginCreate = unsafe fn() -> *mut dyn Plugin;
 
         let lib = Library::new(filename.as_ref()).map_err(|e| "Unable to load the plugin")?;

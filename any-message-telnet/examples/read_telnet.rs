@@ -16,9 +16,11 @@ fn main() {
         std::process::exit(0);
     });
     System::new().block_on(async move {
-        let core = CoreBuilder::new(|| {
-            Node::new("telnet".to_string())
-        }).await;
+        let core = unsafe {
+            CoreBuilder::new(|| {
+                Node::new("telnet".to_string())
+            }).build()
+        };
 
 
         TelnetService::new(

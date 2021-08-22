@@ -1,7 +1,7 @@
 use actix::{Actor, Context, Recipient, Handler};
 use crate::message::Parcel;
 use std::collections::VecDeque;
-use log::{error, trace};
+use log::{error};
 
 pub enum ExchangeType {
     RoundRobin,
@@ -29,7 +29,7 @@ impl Actor for Exchange {
 impl Handler<Parcel> for Exchange {
     type Result = ();
 
-    fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Parcel, _ctx: &mut Self::Context) -> Self::Result {
         match self.exchange_type {
             ExchangeType::Fanout => {
                 for recipient in &self.recipients {

@@ -15,7 +15,7 @@ use semver::Version;
 use base::signal::Tick;
 use log::{info, debug, trace};
 use base::plugin::Plugin;
-// use base::plugin::decalre_plugin;
+use base::config::ServiceConfig;
 
 pub struct TelnetService {
     host: String,
@@ -55,7 +55,7 @@ impl TelnetService {
             ping_interval_in_millis,
             messages: vec![],
             send_to,
-            message_type
+            message_type,
         };
 
         this
@@ -101,6 +101,12 @@ impl TelnetService {
                 Target::Consumer(self.message_type.clone()), Route::new(),
             )));
     }
+
+
+}
+#[no_mangle]
+pub extern "C" fn serv_config(config: ServiceConfig, node: Addr<Node>) -> ServiceCore {
+    ServiceCore::new(config.name, node.clone())
 }
 
 impl Actor for TelnetService {
@@ -133,12 +139,16 @@ impl Service for TelnetService {
         service_core.add_operation(
             Operation::new(
                 "SendMessageToTelnet".to_string(),
-                Version::new(1, 0,0),
-                "".to_string()
+                Version::new(1, 0, 0),
+                "".to_string(),
             )
         );
 
         service_core.set_consuming_messages_types(vec!["TelnetCommand".to_string()]);
+    }
+
+    fn handle_message(&self, message: &BaseMessage) {
+        trace!("Consuming message in telnet {:?}", message);
     }
 }
 
@@ -147,6 +157,12 @@ impl Handler<Parcel> for TelnetService {
 
     fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
         trace!("Consuming message in telnet {:?}", msg);
+
+        let messages = msg.unpack();
+
+        for message in messages {
+            self.handle_message(message);
+        }
     }
 }
 
@@ -167,7 +183,8 @@ impl Plugin for TelnetServicePlugin {
     }
 
     fn on_load(&self, core: &mut Core) {
-        info!("Telnet plugin loaded");
+        debug!("Loading telnet plugin");
+        core.service_config("TelnetService".to_string(), Box::new(serv_config));
     }
 
     fn on_unload(&self) {
@@ -202,11 +219,13 @@ mod tests {
             std::thread::sleep(Duration::from_secs(5));
             std::process::exit(0);
         });
-        System::new().block_on(unsafe {
-            async move  {
-                let core = CoreBuilder::new(|| {
-                    Node::new("telnet".to_string())
-                }).build();
+        System::new().block_on(
+            async move {
+                let core = unsafe {
+                    CoreBuilder::new(|| {
+                        Node::new("telnet".to_string())
+                    }).plugins(vec!["target/debug/libany_message_telnet.rlib".to_string()]).build()
+                };
 
 
                 let telnet = TelnetService::new(
@@ -227,6 +246,6 @@ mod tests {
 
                 core.run().await;
             }
-        });
+        );
     }
 }

@@ -27,11 +27,7 @@ impl ConfigBuilder {
     pub fn build(&mut self) -> CoreConfig {
         CoreConfig{ name: "".to_string(), node_config: NodeConfig { name: "".to_string(), service_config: ServiceConfig {
             name: "".to_string(),
-            operation_config: OperationConfig {
-                name: "".to_string(),
-                version: Version::Nil,
-                description: "".to_string()
-            },
+            operation_config: Default::default(),
             parameters: Default::default()
         } } }
     }
@@ -53,12 +49,14 @@ pub struct NodeConfig {
     service_config: ServiceConfig,
 }
 
+#[derive(Debug)]
 pub struct ServiceConfig {
-    name: String,
-    operation_config: OperationConfig,
-    parameters: HashMap<String, String>,
+    pub name: String,
+    pub operation_config: HashMap<String, OperationConfig>,
+    pub parameters: HashMap<String, String>,
 }
 
+#[derive(Debug)]
 pub struct OperationConfig {
     name: String,
     version: Version,
