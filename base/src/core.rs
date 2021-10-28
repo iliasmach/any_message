@@ -5,7 +5,7 @@ use actix::{Addr, Arbiter, Actor, ArbiterHandle};
 use crate::signal::{Heartbeat, RegisterServiceInNodeSignal};
 use std::time::Duration;
 use log::{info, trace, error, debug};
-use crate::service::{ServiceCore};
+use crate::service::{ServiceCore, ServiceFunctions};
 use crate::transport::Transport;
 use crate::message::Parcel;
 use crate::config::ServiceConfig;
@@ -19,7 +19,6 @@ pub struct CoreBuilder<F>
         F: Fn() -> Node,
 {
     factory: F,
-
     plugins: Vec<String>,
     plugin_manager: PluginManager,
 }
@@ -58,12 +57,12 @@ impl<F> CoreBuilder<F>
         };
 
         for plugin in &self.plugins {
-            info!("Loading plugin in build");
-            info!("{:?}",std::fs::File::open(plugin.clone()));
+            trace!("Loading plugin in build");
+            trace!("{:?}",std::fs::File::open(plugin.clone()));
             unsafe {
                 match self.plugin_manager.load_plugin(plugin, &mut core) {
                     Ok(_result) => {
-                        info!("Plugin loaded!");
+                        trace!("Plugin loaded!");
                     }
                     Err(e) => {
                         error!("Error while loading plugin\n{:?}", e);
@@ -72,17 +71,23 @@ impl<F> CoreBuilder<F>
             }
         }
 
-        trace!("{:?}", core.service_factories.keys());
-
         let factory = core.service_factories.get("TelnetService").unwrap();
-        trace!("aaa");
-        let a = factory(ServiceConfig {
+
+        let mut config = ServiceConfig {
             name: "".to_string(),
             operation_config: Default::default(),
-            parameters: Default::default(),
-        }, core.node.clone());
+            parameters: Default::default()
+        };
 
-        debug!("{:?}", a);
+        config.parameters.insert("host".to_string(), "185.179.2.33".to_string());
+        config.parameters.insert("message_type".to_string(), "TelnetMessage".to_string());
+        config.parameters.insert("port".to_string(), "5038".to_string());
+        config.parameters.insert("buffer_size".to_string(), "10000000".to_string());
+        config.parameters.insert("delay_in_millis".to_string(), "33".to_string());
+
+        let a = factory(&config).unwrap();
+
+        let b = (a.on_start)(config);
 
         core
     }
@@ -91,7 +96,7 @@ impl<F> CoreBuilder<F>
 pub struct Core {
     arbiter: ArbiterHandle,
     node: Addr<Node>,
-    service_factories: HashMap<ServiceTypeName, Box<extern "C" fn(ServiceConfig, Addr<Node>) -> ServiceCore>>,
+    service_factories: HashMap<ServiceTypeName, Box<extern "C" fn(&ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error> > >>,
 }
 
 impl Core {
@@ -151,7 +156,7 @@ impl Core {
         service_addr
     }
 
-    pub fn service_config(&mut self, service_type_name: ServiceTypeName, service_factory: Box<extern "C" fn(ServiceConfig, Addr<Node>) -> ServiceCore>) {
+    pub fn service_config(&mut self, service_type_name: ServiceTypeName, service_factory: Box<extern "C" fn(&ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error>>>) {
         self.service_factories.insert(service_type_name, service_factory);
     }
 }

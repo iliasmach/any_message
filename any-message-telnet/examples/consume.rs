@@ -3,7 +3,7 @@ use actix::{System, Actor, Addr, Handler, Context};
 use base::core::{CoreBuilder, Core};
 use base::node::Node;
 use base::message::{Parcel, BaseMessage};
-use base::service::{Service, ServiceCore, ServiceRecipients, ServiceRecipient};
+use base::service::{Service, ServiceCore, ServiceRecipient};
 use log::trace;
 use base::signal::{Tick};
 use base::transport::Transport;
@@ -50,33 +50,31 @@ impl Handler<Tick> for Consumer {
 fn main() {
     dotenv::dotenv();
     env_logger::init();
-    let j = std::thread::spawn(|| {
+    let _j = std::thread::spawn(|| {
         std::thread::sleep(Duration::from_secs(5));
         std::process::exit(0);
     });
     System::new().block_on(async move {
-        let mut core =  unsafe {
+        let mut core =
             CoreBuilder::new(|| {
                 let node = Node::new("telnet".to_string());
 
                 node
-            }).plugins(vec!["target/debug/libany_message_telnet.dylib".to_string()]).build()
-        };
+            }).plugins(vec!["target/debug/libany_message_telnet.dylib".to_string()]).build();
 
         let service = core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
-        let telnet_service = core.service("Asterisk".to_string(), Box::new(TelnetService::config_system)).await;
-
-        let telnet_actor = TelnetService::new(
-            core.node().clone().recipient::<Parcel>(),
-            "Asterisk Message".to_string(),
-            "185.179.2.33".to_string(),
-            5038,
-            10000000,
-            Some(50)).start();
+        // let telnet_service = core.service("Asterisk".to_string(), Box::new(TelnetService::config_system)).await;
+        //
+        // let telnet_actor = TelnetService::new(
+        //     "Asterisk Message".to_string(),
+        //     "185.179.2.33".to_string(),
+        //     5038,
+        //     10000000,
+        //     Some(50)).start();
 
         let consumer_actor = Consumer::start(Consumer{});
 
-        ServiceCore::link(telnet_service, telnet_actor.recipients());
+        // ServiceCore::link(telnet_service, telnet_actor.recipients());
         ServiceCore::link(service, consumer_actor.recipients());
 
 

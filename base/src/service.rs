@@ -9,7 +9,8 @@ use crate::node::{Node};
 use crate::transport::Transport;
 use crate::core::Core;
 use actix::dev::ToEnvelope;
-use log::{trace,error};
+use log::{trace, error};
+use crate::config::ServiceConfig;
 
 pub trait Service {
     fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized;
@@ -34,7 +35,6 @@ impl<T: Actor + Handler<Tick> + Handler<Parcel>> ServiceRecipient<T> for Addr<T>
         let parcel = self.clone().recipient::<Parcel>();
         ServiceRecipients::new(tick, parcel)
     }
-
 }
 
 #[derive(Debug)]
@@ -53,18 +53,23 @@ impl ServiceRecipients {
     }
 }
 
-#[derive(Debug)]
+pub struct ServiceFunctions {
+    pub on_start: Box<dyn Fn(ServiceConfig) -> Result<Box<dyn Service>, Box<dyn std::error::Error>> + Send>,
+
+}
+
+
 pub struct ServiceCore {
-    pub route: Route,
+    route: Route,
     operations: Vec<Operation>,
     consume_message_types: Vec<String>,
-    //operation_handlers: HashMap<Operation, Box<dyn Fn(&BaseMessage) -> Result<(), Error> + Send>>,
     requests_awaits: HashMap<String, Request>,
     statistics: ServiceStatistics,
     node: Addr<Node>,
     next: Option<Recipient<Parcel>>,
     recipients: Option<ServiceRecipients>,
     transport: Option<Transport>,
+    functions: Option<ServiceFunctions>,
 }
 
 impl ServiceCore {
@@ -74,18 +79,19 @@ impl ServiceCore {
             route,
             operations: vec![],
             consume_message_types: vec![],
-         //   operation_handlers: Default::default(),
+            //   operation_handlers: Default::default(),
             requests_awaits: Default::default(),
             statistics: ServiceStatistics::new(),
             node,
             next: None,
             recipients: None,
             transport: None,
+            functions: None,
         }
     }
 
     pub fn link(service: Addr<ServiceCore>, recipients: ServiceRecipients) {
-        service.do_send(LinkService{ recipients })
+        service.do_send(LinkService { recipients })
     }
 
     pub fn route(&self) -> &Route {
@@ -132,14 +138,14 @@ impl Handler<Parcel> for ServiceCore {
         match &self.recipients {
             None => {
                 self.node.do_send(msg);
-            },
+            }
             Some(recepients) => {
-               match recepients.parcel.do_send(msg) {
-                   Err(e) => {
-                       error!("Error {:?}", e);
-                   },
-                   _ => {}
-               }
+                match recepients.parcel.do_send(msg) {
+                    Err(e) => {
+                        error!("Error {:?}", e);
+                    }
+                    _ => {}
+                }
             }
         }
     }

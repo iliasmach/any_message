@@ -7,7 +7,7 @@ use telnet::{Telnet, TelnetEvent};
 use actix::{Recipient, Context, Actor, AsyncContext, Addr, Handler};
 use std::time::Duration;
 use base::route::{RouteSheet, Route, Target};
-use base::service::{Service, ServiceCore};
+use base::service::{Service, ServiceCore, ServiceFunctions};
 use base::node::Node;
 use base::core::Core;
 use base::operation::Operation;
@@ -25,14 +25,29 @@ pub struct TelnetService {
     buf: String,
     ping_interval_in_millis: Option<u64>,
     messages: Vec<BaseMessage>,
-    send_to: Recipient<Parcel>,
     message_type: String,
 }
 
 
 impl TelnetService {
-    pub fn new(send_to: Recipient<Parcel>,
-               message_type: String,
+    pub fn on_start(config: ServiceConfig) -> Result<Box<dyn Service>, Box<dyn std::error::Error>> {
+        println!("{:?}", config);
+        let message_type = config.parameters.get("message_type").unwrap();
+        let host = config.parameters.get("host").unwrap();
+        let port : u16= config.parameters.get("port").unwrap().parse().unwrap();
+        let buffer_size: u32 = config.parameters.get("buffer_size").unwrap().parse().unwrap();
+        let delay_in_millis: u64 = config.parameters.get("delay_in_millis").unwrap().parse().unwrap();
+        let telnet_service=  TelnetService::new(
+            message_type.clone(),
+            host.clone(),
+            port as u16,
+            buffer_size as u32,
+            Some(delay_in_millis as u64)
+        );
+        Ok(Box::new(telnet_service))
+    }
+
+    pub fn new(message_type: String,
                host: String,
                port: u16,
                buff_size: u32,
@@ -54,7 +69,6 @@ impl TelnetService {
             buf: String::with_capacity(buff_size as usize),
             ping_interval_in_millis,
             messages: vec![],
-            send_to,
             message_type,
         };
 
@@ -86,27 +100,13 @@ impl TelnetService {
             _ => {}
         };
     }
-
-    pub fn send_messages(&mut self) {
-        if self.messages.is_empty() {
-            return;
-        }
-        trace!("Try to send");
-        let messages = self.messages.clone();
-        self.messages.clear();
-
-        trace!("Sending messages");
-        self.send_to.do_send(
-            Parcel::new(messages, RouteSheet::new(
-                Target::Consumer(self.message_type.clone()), Route::new(),
-            )));
-    }
-
-
 }
+
 #[no_mangle]
-pub extern "C" fn serv_config(config: ServiceConfig, node: Addr<Node>) -> ServiceCore {
-    ServiceCore::new(config.name, node.clone())
+pub extern "C" fn serv_config(config: &ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error>> {
+    Ok(ServiceFunctions {
+        on_start: Box::new(TelnetService::on_start)
+    })
 }
 
 impl Actor for TelnetService {
@@ -124,13 +124,13 @@ impl Actor for TelnetService {
             },
         );
 
-        ctx.run_interval(
-            Duration::from_millis(
-                100),
-            |this, _this_ctx| {
-                this.send_messages();
-            },
-        );
+        // ctx.run_interval(
+        //     Duration::from_millis(
+        //         100),
+        //     |this, _this_ctx| {
+        //         this.send_messages();
+        //     },
+        // );
     }
 }
 
@@ -221,15 +221,13 @@ mod tests {
         });
         System::new().block_on(
             async move {
-                let core = unsafe {
+                let core =
                     CoreBuilder::new(|| {
                         Node::new("telnet".to_string())
-                    }).plugins(vec!["target/debug/libany_message_telnet.rlib".to_string()]).build()
-                };
+                    }).plugins(vec!["target/debug/libany_message_telnet.rlib".to_string()]).build();
 
 
                 let telnet = TelnetService::new(
-                    core.node().recipient::<Parcel>(),
                     "TelnetMesage".to_string(),
                     "185.179.2.33".to_string(),
                     5038,
