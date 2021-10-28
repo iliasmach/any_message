@@ -1,14 +1,12 @@
 use std::time::Duration;
-use actix::{System, Actor, Addr, Handler, Context};
-use base::core::{CoreBuilder, Core};
-use base::node::Node;
-use base::message::{Parcel, BaseMessage};
-use base::service::{Service, ServiceCore, ServiceRecipient};
+use actix::{Actor, Addr, Context, Handler};
+use actix_rt::System;
+use any_message::core::{Core, CoreBuilder};
+use any_message::message::{BaseMessage, Parcel};
+use any_message::node::Node;
+use any_message::service::{Service, ServiceCore, ServiceRecipient};
+use any_message::signal::Tick;
 use log::trace;
-use base::signal::{Tick};
-use base::transport::Transport;
-use any_message_telnet::{TelnetService};
-
 
 #[derive(Clone)]
 pub struct Consumer {}
@@ -60,7 +58,7 @@ fn main() {
                 let node = Node::new("telnet".to_string());
 
                 node
-            }).plugins(vec!["target/debug/libany_message_telnet.dylib".to_string()]).build();
+            }).build();
 
         let service = core.service("Consumer".to_string(), Box::new(Consumer::config_system)).await;
         // let telnet_service = core.service("Asterisk".to_string(), Box::new(TelnetService::config_system)).await;

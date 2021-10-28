@@ -1,21 +1,19 @@
 extern crate log;
-#[macro_use]
-extern crate base;
 
-use base::message::{BaseMessage, Parcel};
-use telnet::{Telnet, TelnetEvent};
+
 use actix::{Recipient, Context, Actor, AsyncContext, Addr, Handler};
 use std::time::Duration;
-use base::route::{RouteSheet, Route, Target};
-use base::service::{Service, ServiceCore, ServiceFunctions};
-use base::node::Node;
-use base::core::Core;
-use base::operation::Operation;
 use semver::Version;
-use base::signal::Tick;
 use log::{info, debug, trace};
-use base::plugin::Plugin;
-use base::config::ServiceConfig;
+use telnet::{Event, Telnet};
+use crate::config::ServiceConfig;
+use crate::core::Core;
+use crate::message::{BaseMessage, Parcel};
+use crate::node::Node;
+use crate::operation::Operation;
+use crate::plugin::Plugin;
+use crate::service::{Service, ServiceCore, ServiceFunctions};
+use crate::signal::Tick;
 
 pub struct TelnetService {
     host: String,
@@ -91,7 +89,7 @@ impl TelnetService {
         };
 
         match event {
-            TelnetEvent::Data(buffer) => {
+            Event::Data(buffer) => {
                 debug!("{:?}", String::from_utf8(buffer.clone().to_vec()));
                 let message = BaseMessage::new(buffer.to_vec(), None);
 
@@ -192,7 +190,7 @@ impl Plugin for TelnetServicePlugin {
     }
 }
 
-declare_plugin!(TelnetServicePlugin, TelnetServicePlugin::default);
+// declare_plugin!(TelnetServicePlugin, TelnetServicePlugin::default);
 
 #[cfg(test)]
 mod tests {
@@ -209,6 +207,10 @@ mod tests {
     use log::info;
     use base::operation::{OperationHandler, Operation};
     use semver::Version;
+    use crate::any_message_telnet::TelnetService;
+    use crate::core::CoreBuilder;
+    use crate::node::Node;
+    use crate::service::Service;
 
 
     #[test]

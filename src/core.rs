@@ -71,23 +71,7 @@ impl<F> CoreBuilder<F>
             }
         }
 
-        let factory = core.service_factories.get("TelnetService").unwrap();
 
-        let mut config = ServiceConfig {
-            name: "".to_string(),
-            operation_config: Default::default(),
-            parameters: Default::default()
-        };
-
-        config.parameters.insert("host".to_string(), "185.179.2.33".to_string());
-        config.parameters.insert("message_type".to_string(), "TelnetMessage".to_string());
-        config.parameters.insert("port".to_string(), "5038".to_string());
-        config.parameters.insert("buffer_size".to_string(), "10000000".to_string());
-        config.parameters.insert("delay_in_millis".to_string(), "33".to_string());
-
-        let a = factory(&config).unwrap();
-
-        let b = (a.on_start)(config);
 
         core
     }
