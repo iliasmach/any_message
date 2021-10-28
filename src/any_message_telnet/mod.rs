@@ -133,7 +133,7 @@ impl Actor for TelnetService {
 }
 
 impl Service for TelnetService {
-    fn config_system(service_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
+    fn config_system(&mut self, service_core: &mut ServiceCore, node: Addr<Node>) where Self: Sized {
         service_core.add_operation(
             Operation::new(
                 "SendMessageToTelnet".to_string(),
@@ -194,24 +194,19 @@ impl Plugin for TelnetServicePlugin {
 
 #[cfg(test)]
 mod tests {
-    use base::node::{Node};
+    use crate::node::{Node};
     use actix::{Actor, Arbiter};
-    use base::route::{Route, RouteSheet};
-    use crate::{TelnetService};
+    use crate::route::{Route, RouteSheet};
     use std::time::Duration;
-    use base::signal::{GetMessagesSignal, Tick};
+    use crate::signal::{GetMessagesSignal, Tick};
     use actix_rt::System;
-    use base::message::{BaseMessage, Parcel};
-    use base::core::{Core, CoreBuilder};
-    use base::service::{ServiceCore, Service, ServiceRecipients, ServiceRecipient};
+    use crate::message::{BaseMessage, Parcel};
+    use crate::core::{Core, CoreBuilder};
+    use crate::service::{ServiceCore, Service, ServiceRecipients, ServiceRecipient};
     use log::info;
-    use base::operation::{OperationHandler, Operation};
+    use crate::operation::{OperationHandler, Operation};
     use semver::Version;
     use crate::any_message_telnet::TelnetService;
-    use crate::core::CoreBuilder;
-    use crate::node::Node;
-    use crate::service::Service;
-
 
     #[test]
     fn it_works() {
@@ -226,23 +221,21 @@ mod tests {
                 let core =
                     CoreBuilder::new(|| {
                         Node::new("telnet".to_string())
-                    }).plugins(vec!["target/debug/libany_message_telnet.rlib".to_string()]).build();
+                    }).service("telnet".to_string(), |node| {
+                        let telnet = TelnetService::new(
+                            "TelnetMesage".to_string(),
+                            "185.179.2.33".to_string(),
+                            5038,
+                            10000000,
+                            Some(50));
+
+                        Box::new(telnet)
+                    }).build().await;
 
 
-                let telnet = TelnetService::new(
-                    "TelnetMesage".to_string(),
-                    "185.179.2.33".to_string(),
-                    5038,
-                    10000000,
-                    Some(50));
-
-                let telnet_service = TelnetService::start(telnet);
 
 
-                core.service(
-                    "telnet".to_string(),
-                    TelnetService::config_system,
-                ).await;
+
 
                 core.run().await;
             }

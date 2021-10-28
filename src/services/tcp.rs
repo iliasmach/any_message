@@ -23,7 +23,7 @@ impl Actor for TcpService {
 }
 
 impl Service for TcpService {
-    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized {
+    fn config_system(&mut self, system_core: &mut ServiceCore, node: Addr<Node>) {
         todo!()
     }
 

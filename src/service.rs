@@ -13,7 +13,7 @@ use log::{trace, error};
 use crate::config::ServiceConfig;
 
 pub trait Service {
-    fn config_system(system_core: &mut ServiceCore, node: Addr<Node>, core: &Core) where Self: Sized;
+    fn config_system(&mut self, system_core: &mut ServiceCore, node: Addr<Node>);
     fn handle_message(&self, message: &BaseMessage);
 }
 

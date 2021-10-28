@@ -5,7 +5,7 @@ use actix::{Addr, Arbiter, Actor, ArbiterHandle};
 use crate::signal::{Heartbeat, RegisterServiceInNodeSignal};
 use std::time::Duration;
 use log::{info, trace, error, debug};
-use crate::service::{ServiceCore, ServiceFunctions};
+use crate::service::{Service, ServiceCore, ServiceFunctions};
 use crate::transport::Transport;
 use crate::message::Parcel;
 use crate::config::ServiceConfig;
@@ -19,6 +19,7 @@ pub struct CoreBuilder<F>
         F: Fn() -> Node,
 {
     factory: F,
+    service_builders: HashMap<String, Box<fn(Addr<Node>) -> Box<dyn Service>>>,
     plugins: Vec<String>,
     plugin_manager: PluginManager,
 }
@@ -32,6 +33,7 @@ impl<F> CoreBuilder<F>
             factory,
             plugin_manager: PluginManager::new(),
             plugins: vec![],
+            service_builders: HashMap::default(),
         };
 
         builder
@@ -42,7 +44,13 @@ impl<F> CoreBuilder<F>
         self
     }
 
-    pub fn build(&mut self) -> Core {
+    pub fn service(&mut self, service_name: String, config: fn(Addr<Node>) -> Box<dyn Service>) -> &mut Self {
+        self.service_builders.insert(service_name, Box::from(config));
+
+        self
+    }
+
+    pub async fn build(&mut self) -> Core {
         let node = (self.factory)();
 
         let arbiter = Arbiter::new().handle();
@@ -50,11 +58,40 @@ impl<F> CoreBuilder<F>
             node
         });
 
+
         let mut core = Core {
             arbiter,
-            node,
+            node: node.clone(),
             service_factories: Default::default(),
+            services: Default::default(),
         };
+
+        for (service_name, service_builder) in &self.service_builders {
+            let mut service = service_builder(node.clone());
+
+            let mut service_core = ServiceCore::new(service_name.clone(), node.clone());
+            service.config_system(&mut service_core, node.clone());
+
+            let arbiter = Arbiter::new().handle();
+            let consumed_messages = service_core.get_consuming_message_types();
+            let operations = service_core.get_operations().clone();
+
+            let service_addr = ServiceCore::start_in_arbiter(&arbiter, |_ctx| {
+                service_core
+            });
+
+            match node.send(RegisterServiceInNodeSignal {
+                transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
+                name: service_name.clone(),
+                operations: operations.clone(),
+                consume_messages: consumed_messages,
+            }).await {
+                Err(e) => {
+                    error!("Error {:?}", e);
+                }
+                _ => {}
+            }
+        }
 
         for plugin in &self.plugins {
             trace!("Loading plugin in build");
@@ -72,7 +109,6 @@ impl<F> CoreBuilder<F>
         }
 
 
-
         core
     }
 }
@@ -80,7 +116,8 @@ impl<F> CoreBuilder<F>
 pub struct Core {
     arbiter: ArbiterHandle,
     node: Addr<Node>,
-    service_factories: HashMap<ServiceTypeName, Box<extern "C" fn(&ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error> > >>,
+    service_factories: HashMap<ServiceTypeName, Box<extern "C" fn(&ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error>>>>,
+    services: HashMap<String, Addr<ServiceCore>>,
 }
 
 impl Core {
@@ -95,6 +132,7 @@ impl Core {
             arbiter,
             node,
             service_factories: Default::default(),
+            services: Default::default(),
         }
     }
 
@@ -106,39 +144,13 @@ impl Core {
             }
             std::thread::sleep(Duration::from_millis(50));
         };
-
     }
 
     pub fn node(&self) -> Addr<Node> {
         self.node.clone()
     }
 
-    pub async fn service<F: Fn(&mut ServiceCore, Addr<Node>, &Core)>(&self, service_name: String, config: F) -> Addr<ServiceCore> {
-        let mut service_core = ServiceCore::new(service_name.clone(), self.node.clone());
-        config(&mut service_core, self.node.clone(), self);
 
-        let arbiter = Arbiter::new().handle();
-        let consumed_messages = service_core.get_consuming_message_types();
-        let operations = service_core.get_operations().clone();
-
-        let service_addr = ServiceCore::start_in_arbiter(&arbiter, |_ctx| {
-            service_core
-        });
-
-        match self.node.send(RegisterServiceInNodeSignal {
-            transport: Transport::new(service_addr.clone().recipient::<Parcel>()),
-            name: service_name,
-            operations: operations.clone(),
-            consume_messages: consumed_messages,
-        }).await {
-            Err(e) => {
-                error!("Error {:?}", e);
-            },
-            _ => {}
-        }
-
-        service_addr
-    }
 
     pub fn service_config(&mut self, service_type_name: ServiceTypeName, service_factory: Box<extern "C" fn(&ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error>>>) {
         self.service_factories.insert(service_type_name, service_factory);
