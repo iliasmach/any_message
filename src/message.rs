@@ -88,6 +88,7 @@ impl Message for Parcel {
     type Result = ();
 }
 
+#[derive(Debug)]
 pub struct Request {
     body: Vec<u8>,
     route_sheet: RouteSheet,

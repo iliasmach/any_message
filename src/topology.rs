@@ -1,13 +1,11 @@
-use crate::operation::Operation;
 use crate::transport::Transport;
 use std::collections::HashMap;
 use crate::route::{Route, Target};
-use actix::Addr;
-use crate::node::Node;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use log::{error, trace};
 
+#[derive(Debug)]
 pub struct Topology {
     route_table: HashMap<String, Transport>,
     subscribers: HashMap<String, Vec<Transport>>,

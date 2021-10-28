@@ -1,16 +1,16 @@
 use crate::route::{Route, Target};
 use std::collections::HashMap;
 use crate::transport::Transport;
-use actix::{Actor, Context, Handler, AsyncContext, ResponseFuture, Addr, Arbiter};
+use actix::{Actor, Context, Handler, AsyncContext};
 use crate::message::{Parcel, Request};
-use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick, LinkService};
+use crate::signal::{RegisterServiceInNodeSignal, Heartbeat, Tick};
 use log::{trace, error};
 use std::time::{Duration};
 use std::sync::{Arc, Mutex};
 use crate::topology::Topology;
-use crate::service::ServiceCore;
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Node {
     route: Route,
     topology: Topology,
@@ -101,7 +101,7 @@ impl Handler<Parcel> for Node {
 impl Handler<Heartbeat> for Node {
     type Result = ();
 
-    fn handle(&mut self, msg: Heartbeat, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _msg: Heartbeat, _ctx: &mut Context<Self>) -> Self::Result {
         trace!("Heartbeat accepted");
     }
 }
@@ -111,7 +111,7 @@ impl Handler<Heartbeat> for Node {
 impl Handler<Tick> for Node {
     type Result = ();
 
-    fn handle(&mut self, tick: Tick, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _tick: Tick, ctx: &mut Self::Context) -> Self::Result {
         ctx.notify_later(Tick::new(), Duration::from_millis(10));
 
         let mut messages = match self.messages.lock() {

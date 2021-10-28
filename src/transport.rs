@@ -1,6 +1,6 @@
 use actix::Recipient;
 use crate::message::Parcel;
-use log::{trace, error};
+use log::{trace};
 
 #[derive(Clone, Debug)]
 pub struct Transport {

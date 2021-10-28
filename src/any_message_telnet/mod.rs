@@ -1,17 +1,19 @@
 extern crate log;
 
-use crate::message::{BaseMessage, Parcel};
+
 use actix::{Recipient, Context, Actor, AsyncContext, Addr, Handler};
 use std::time::Duration;
-use crate::route::{RouteSheet, Route, Target};
-use crate::service::{Service, ServiceCore};
-use crate::node::Node;
-use crate::core::Core;
-use crate::operation::Operation;
 use semver::Version;
+use log::{info, debug, trace};
+use telnet::{Event, Telnet};
+use crate::config::ServiceConfig;
+use crate::core::Core;
+use crate::message::{BaseMessage, Parcel};
+use crate::node::Node;
+use crate::operation::Operation;
+use crate::plugin::Plugin;
+use crate::service::{Service, ServiceCore, ServiceFunctions};
 use crate::signal::Tick;
-use log::{trace, error, info, debug};
-
 
 pub struct TelnetService {
     host: String,
@@ -21,14 +23,29 @@ pub struct TelnetService {
     buf: String,
     ping_interval_in_millis: Option<u64>,
     messages: Vec<BaseMessage>,
-    send_to: Recipient<Parcel>,
     message_type: String,
 }
 
 
 impl TelnetService {
-    pub fn new(send_to: Recipient<Parcel>,
-               message_type: String,
+    pub fn on_start(config: ServiceConfig) -> Result<Box<dyn Service>, Box<dyn std::error::Error>> {
+        println!("{:?}", config);
+        let message_type = config.parameters.get("message_type").unwrap();
+        let host = config.parameters.get("host").unwrap();
+        let port : u16= config.parameters.get("port").unwrap().parse().unwrap();
+        let buffer_size: u32 = config.parameters.get("buffer_size").unwrap().parse().unwrap();
+        let delay_in_millis: u64 = config.parameters.get("delay_in_millis").unwrap().parse().unwrap();
+        let telnet_service=  TelnetService::new(
+            message_type.clone(),
+            host.clone(),
+            port as u16,
+            buffer_size as u32,
+            Some(delay_in_millis as u64)
+        );
+        Ok(Box::new(telnet_service))
+    }
+
+    pub fn new(message_type: String,
                host: String,
                port: u16,
                buff_size: u32,
@@ -50,8 +67,7 @@ impl TelnetService {
             buf: String::with_capacity(buff_size as usize),
             ping_interval_in_millis,
             messages: vec![],
-            send_to,
-            message_type
+            message_type,
         };
 
         this
@@ -73,7 +89,7 @@ impl TelnetService {
         };
 
         match event {
-            TelnetEvent::Data(buffer) => {
+            Event::Data(buffer) => {
                 debug!("{:?}", String::from_utf8(buffer.clone().to_vec()));
                 let message = BaseMessage::new(buffer.to_vec(), None);
 
@@ -82,21 +98,13 @@ impl TelnetService {
             _ => {}
         };
     }
+}
 
-    pub fn send_messages(&mut self) {
-        if self.messages.is_empty() {
-            return;
-        }
-        trace!("Try to send");
-        let messages = self.messages.clone();
-        self.messages.clear();
-
-        trace!("Sending messages");
-        self.send_to.do_send(
-            Parcel::new(messages, RouteSheet::new(
-                Target::Consumer(self.message_type.clone()), Route::new(),
-            )));
-    }
+#[no_mangle]
+pub extern "C" fn serv_config(config: &ServiceConfig) -> Result<ServiceFunctions, Box<dyn std::error::Error>> {
+    Ok(ServiceFunctions {
+        on_start: Box::new(TelnetService::on_start)
+    })
 }
 
 impl Actor for TelnetService {
@@ -114,13 +122,13 @@ impl Actor for TelnetService {
             },
         );
 
-        ctx.run_interval(
-            Duration::from_millis(
-                100),
-            |this, _this_ctx| {
-                this.send_messages();
-            },
-        );
+        // ctx.run_interval(
+        //     Duration::from_millis(
+        //         100),
+        //     |this, _this_ctx| {
+        //         this.send_messages();
+        //     },
+        // );
     }
 }
 
@@ -129,12 +137,16 @@ impl Service for TelnetService {
         service_core.add_operation(
             Operation::new(
                 "SendMessageToTelnet".to_string(),
-                Version::new(1, 0,0),
-                "".to_string()
+                Version::new(1, 0, 0),
+                "".to_string(),
             )
         );
 
         service_core.set_consuming_messages_types(vec!["TelnetCommand".to_string()]);
+    }
+
+    fn handle_message(&self, message: &BaseMessage) {
+        trace!("Consuming message in telnet {:?}", message);
     }
 }
 
@@ -143,6 +155,12 @@ impl Handler<Parcel> for TelnetService {
 
     fn handle(&mut self, msg: Parcel, ctx: &mut Self::Context) -> Self::Result {
         trace!("Consuming message in telnet {:?}", msg);
+
+        let messages = msg.unpack();
+
+        for message in messages {
+            self.handle_message(message);
+        }
     }
 }
 
@@ -154,6 +172,25 @@ impl Handler<Tick> for TelnetService {
     }
 }
 
+#[derive(Default)]
+pub struct TelnetServicePlugin;
+
+impl Plugin for TelnetServicePlugin {
+    fn name(&self) -> &'static str {
+        "TelnetServicePlugin"
+    }
+
+    fn on_load(&self, core: &mut Core) {
+        debug!("Loading telnet plugin");
+        core.service_config("TelnetService".to_string(), Box::new(serv_config));
+    }
+
+    fn on_unload(&self) {
+        info!("Telnet plugin unloaded");
+    }
+}
+
+// declare_plugin!(TelnetServicePlugin, TelnetServicePlugin::default);
 
 #[cfg(test)]
 mod tests {
@@ -170,11 +207,11 @@ mod tests {
     use log::info;
     use base::operation::{OperationHandler, Operation};
     use semver::Version;
+    use crate::any_message_telnet::TelnetService;
     use crate::core::CoreBuilder;
     use crate::node::Node;
-    use crate::services::telnet::TelnetService;
-    use crate::message::Parcel;
     use crate::service::Service;
+
 
     #[test]
     fn it_works() {
@@ -184,29 +221,31 @@ mod tests {
             std::thread::sleep(Duration::from_secs(5));
             std::process::exit(0);
         });
-        System::new().block_on(async move {
-            let core = CoreBuilder::new(|| {
-                Node::new("telnet".to_string())
-            });
+        System::new().block_on(
+            async move {
+                let core =
+                    CoreBuilder::new(|| {
+                        Node::new("telnet".to_string())
+                    }).plugins(vec!["target/debug/libany_message_telnet.rlib".to_string()]).build();
 
 
-            let telnet = TelnetService::new(
-                core.node().recipient::<Parcel>(),
-                "TelnetMesage".to_string(),
-                "185.179.2.33".to_string(),
-                5038,
-                10000000,
-                Some(50));
+                let telnet = TelnetService::new(
+                    "TelnetMesage".to_string(),
+                    "185.179.2.33".to_string(),
+                    5038,
+                    10000000,
+                    Some(50));
 
-            let telnet_service = TelnetService::start(telnet);
+                let telnet_service = TelnetService::start(telnet);
 
 
-            core.service(
-                "telnet".to_string(),
-                TelnetService::config_system,
-            ).await;
+                core.service(
+                    "telnet".to_string(),
+                    TelnetService::config_system,
+                ).await;
 
-            core.run().await;
-        });
+                core.run().await;
+            }
+        );
     }
 }

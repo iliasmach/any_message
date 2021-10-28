@@ -2,7 +2,7 @@ use semver::Version;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Route {
-    route: String,
+    pub route: String,
     node_name: String,
     service_name: String,
     operation_name: String,
